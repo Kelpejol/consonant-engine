@@ -1,0 +1,212 @@
+# docker-compose.yml
+#
+# Purpose: Complete local development environment for Consonant
+#
+# This compose file starts:
+# 1. PostgreSQL with TimescaleDB extension
+# 2. Redis for hot path operations
+# 3. The Consonant API server (when you build it)
+#
+# Usage:
+#   docker-compose up -d          # Start all services
+#   docker-compose logs -f api    # Follow API logs
+#   docker-compose down           # Stop all services
+#   docker-compose down -v        # Stop and remove volumes (fresh start)
+#
+# The services are configured with:
+# - Persistent volumes for data
+# - Health checks for reliability
+# - Exposed ports for development access
+# - Environment variables for configuration
+
+version: '3.8'
+
+services:
+  # PostgreSQL with TimescaleDB for durable storage
+  postgres:
+    image: timescale/timescaledb:latest-pg14
+    container_name: consonant-postgres
+    restart: unless-stopped
+    
+    environment:
+      POSTGRES_DB: consonant
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      # Performance tuning for development
+      # In production, these would be much higher
+      POSTGRES_SHARED_BUFFERS: 256MB
+      POSTGRES_MAX_CONNECTIONS: 100
+    
+    ports:
+      - "5432:5432"
+    
+    volumes:
+      # Persist database data
+      - postgres_data:/var/lib/postgresql/data
+      
+      # Auto-run migrations on startup
+      - ./backend/migrations:/docker-entrypoint-initdb.d
+    
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d consonant"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    
+    networks:
+      - consonant-network
+
+  # Redis for hot path balance operations
+  redis:
+    image: redis:7-alpine
+    container_name: consonant-redis
+    restart: unless-stopped
+    
+    command: >
+      redis-server
+      --maxmemory 512mb
+      --maxmemory-policy allkeys-lru
+      --save 60 1000
+      --appendonly yes
+      --appendfsync everysec
+    
+    ports:
+      - "6379:6379"
+    
+    volumes:
+      # Persist Redis data (RDB snapshots and AOF)
+      - redis_data:/data
+    
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    
+    networks:
+      - consonant-network
+
+  # Consonant API server (uncomment after building)
+  # api:
+  #   build:
+  #     context: ./backend
+  #     dockerfile: ../docker/Dockerfile.backend
+  #   container_name: consonant-api
+  #   restart: unless-stopped
+  #   
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
+  #   
+  #   environment:
+  #     GRPC_PORT: 9090
+  #     HTTP_PORT: 8080
+  #     REDIS_ADDR: redis:6379
+  #     POSTGRES_URL: postgres://postgres:postgres@postgres:5432/consonant?sslmode=disable
+  #     LOG_LEVEL: debug
+  #     ENVIRONMENT: development
+  #   
+  #   ports:
+  #     - "9090:9090"  # gRPC
+  #     - "8080:8080"  # HTTP (health checks, metrics)
+  #   
+  #   healthcheck:
+  #     test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:8080/health"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
+  #   
+  #   networks:
+  #     - consonant-network
+
+  # pgAdmin for database management (optional)
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: consonant-pgadmin
+    restart: unless-stopped
+    
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@consonant.dev
+      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    
+    ports:
+      - "5050:80"
+    
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    
+    networks:
+      - consonant-network
+
+  # Redis Commander for Redis inspection (optional)
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: consonant-redis-commander
+    restart: unless-stopped
+    
+    environment:
+      REDIS_HOSTS: local:redis:6379
+    
+    ports:
+      - "8081:8081"
+    
+    networks:
+      - consonant-network
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  pgadmin_data:
+    driver: local
+
+networks:
+  consonant-network:
+    driver: bridge
+
+# =============================================================================
+# DEVELOPMENT USAGE GUIDE
+# =============================================================================
+#
+# 1. Start the infrastructure:
+#    $ docker-compose up -d postgres redis
+#
+# 2. Wait for services to be healthy:
+#    $ docker-compose ps
+#
+# 3. Run migrations (already done automatically via init scripts):
+#    $ docker-compose exec postgres psql -U postgres -d consonant -c "\dt"
+#
+# 4. Access services:
+#    - PostgreSQL: localhost:5432 (user: postgres, pass: postgres)
+#    - Redis: localhost:6379
+#    - pgAdmin: http://localhost:5050 (email: admin@consonant.dev, pass: admin)
+#    - Redis Commander: http://localhost:8081
+#
+# 5. Build and run the API server:
+#    $ cd backend
+#    $ go build -o bin/api ./cmd/api
+#    $ ./bin/api
+#
+#    Or uncomment the 'api' service above and:
+#    $ docker-compose up -d api
+#
+# 6. Test the API with grpcurl:
+#    $ grpcurl -plaintext -d '{"customer_id": "test_customer_1"}' \
+#      localhost:9090 consonant.balance.v1.BalanceService/GetBalance
+#
+# 7. View logs:
+#    $ docker-compose logs -f postgres
+#    $ docker-compose logs -f redis
+#    $ docker-compose logs -f api
+#
+# 8. Stop everything:
+#    $ docker-compose down
+#
+# 9. Fresh start (removes all data):
+#    $ docker-compose down -v
+#    $ docker-compose up -d
