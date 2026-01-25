@@ -17,9 +17,8 @@
 -- Usage:
 --   psql -d consonant -f 001_initial_schema.up.sql
 
--- Enable TimescaleDB extension
--- This provides time-series optimizations for requests and transactions tables
-CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE;
+-- Enable TimescaleDB extension (Removed for standard Postgres compatibility)
+-- CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE;
 
 -- Enable UUID generation for primary keys
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
@@ -138,12 +137,8 @@ CREATE TABLE transactions (
     metadata JSONB
 );
 
--- Convert to TimescaleDB hypertable partitioned by time
--- This enables fast time-range queries like "show last 24 hours"
-SELECT create_hypertable('transactions', 'created_at', 
-    chunk_time_interval => INTERVAL '1 day',
-    if_not_exists => TRUE
-);
+-- Convert to TimescaleDB hypertable (Removed)
+-- SELECT create_hypertable('transactions', 'created_at', ...);
 
 -- Indexes optimized for common query patterns
 CREATE INDEX idx_transactions_customer_time ON transactions(customer_id, created_at DESC);
@@ -243,11 +238,8 @@ CREATE TABLE requests (
     integrity_issue_description TEXT
 );
 
--- Convert to TimescaleDB hypertable
-SELECT create_hypertable('requests', 'created_at',
-    chunk_time_interval => INTERVAL '1 day',
-    if_not_exists => TRUE
-);
+-- Convert to TimescaleDB hypertable (Removed)
+-- SELECT create_hypertable('requests', 'created_at', ...);
 
 -- Comprehensive indexes for dashboard queries
 CREATE INDEX idx_requests_customer_time ON requests(customer_id, created_at DESC);

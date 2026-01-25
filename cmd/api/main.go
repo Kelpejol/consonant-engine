@@ -29,7 +29,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"net"
 	"net/http"
 	"os"
@@ -60,6 +59,7 @@ type Config struct {
 	GRPCPort     string
 	HTTPPort     string
 	RedisAddr    string
+	RedisPassword string
 	PostgresURL  string
 	LogLevel     string
 	Environment  string
@@ -70,10 +70,11 @@ func LoadConfig() *Config {
 	return &Config{
 		GRPCPort:     getEnv("GRPC_PORT", "9090"),
 		HTTPPort:     getEnv("HTTP_PORT", "8080"),
-		RedisAddr:    getEnv("REDIS_ADDR", "localhost:6379"),
-		PostgresURL:  getEnv("POSTGRES_URL", "postgres://postgres:postgres@localhost:5432/consonant?sslmode=disable"),
-		LogLevel:     getEnv("LOG_LEVEL", "info"),
-		Environment:  getEnv("ENVIRONMENT", "development"),
+		RedisAddr:     getEnv("REDIS_ADDR", "localhost:6379"),
+		RedisPassword: getEnv("REDIS_PASSWORD", ""),
+		PostgresURL:   getEnv("POSTGRES_URL", "postgres://postgres:postgres@localhost:5432/consonant?sslmode=disable"),
+		LogLevel:      getEnv("LOG_LEVEL", "info"),
+		Environment:   getEnv("ENVIRONMENT", "development"),
 	}
 }
 
@@ -99,6 +100,7 @@ func main() {
 	// Initialize Redis connection
 	redisClient := redis.NewClient(&redis.Options{
 		Addr:         cfg.RedisAddr,
+		Password:     cfg.RedisPassword,
 		DialTimeout:  10 * time.Millisecond,
 		ReadTimeout:  20 * time.Millisecond,
 		WriteTimeout: 20 * time.Millisecond,

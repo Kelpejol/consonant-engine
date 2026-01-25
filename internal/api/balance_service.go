@@ -211,8 +211,22 @@ func (s *BalanceService) DeductTokens(ctx context.Context, req *pb.DeductTokensR
 		return nil, status.Errorf(codes.InvalidArgument, "tokens_consumed must be positive")
 	}
 
+	// Determine provider from model name
+	// Model names typically indicate the provider (e.g., "gpt-4" = openai, "claude-3" = anthropic)
+	provider := "openai" // Default
+	if len(req.Model) > 0 {
+		switch {
+		case req.Model[:3] == "gpt" || req.Model[:4] == "text" || req.Model[:3] == "ada":
+			provider = "openai"
+		case len(req.Model) >= 6 && req.Model[:6] == "claude":
+			provider = "anthropic"
+		case len(req.Model) >= 6 && req.Model[:6] == "gemini":
+			provider = "google"
+		}
+	}
+
 	// Calculate grain cost based on model pricing
-	pricing, err := s.ledger.GetModelPricing(req.Model, "openai") // TODO: support multiple providers
+	pricing, err := s.ledger.GetModelPricing(req.Model, provider)
 	if err != nil {
 		s.log.Error().Err(err).Str("model", req.Model).Msg("failed to get pricing")
 		return nil, status.Errorf(codes.Internal, "failed to get model pricing")
