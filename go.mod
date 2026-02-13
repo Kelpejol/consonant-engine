@@ -1,4 +1,4 @@
-module github.com/consonant/backend
+module github.com/Beam/backend
 
 go 1.25
 

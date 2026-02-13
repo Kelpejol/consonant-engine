@@ -1,7 +1,7 @@
-# Makefile for Consonant System
+# Makefile for Beam System
 #
 # This Makefile provides convenient targets for building, testing, and running
-# the Consonant system during development and deployment.
+# the Beam system during development and deployment.
 #
 # Common commands:
 #   make dev          - Start infrastructure and run backend locally
@@ -82,7 +82,7 @@ backend-run: ## Run backend locally (requires infra-up first)
 		GRPC_PORT=9090 \
 		HTTP_PORT=8080 \
 		REDIS_ADDR=localhost:6379 \
-		POSTGRES_URL="postgres://postgres:postgres@localhost:5432/consonant?sslmode=disable" \
+		POSTGRES_URL="postgres://postgres:postgres@localhost:5432/Beam?sslmode=disable" \
 		LOG_LEVEL=debug \
 		ENVIRONMENT=development \
 		./bin/api
@@ -117,11 +117,11 @@ backend-format: ## Format backend code
 
 .PHONY: db-connect
 db-connect: ## Connect to PostgreSQL
-	docker-compose exec postgres psql -U postgres -d consonant
+	docker-compose exec postgres psql -U postgres -d Beam
 
 .PHONY: db-migrate
 db-migrate: ## Run database migrations
-	docker-compose exec postgres psql -U postgres -d consonant -f /docker-entrypoint-initdb.d/001_initial_schema.up.sql
+	docker-compose exec postgres psql -U postgres -d Beam -f /docker-entrypoint-initdb.d/001_initial_schema.up.sql
 
 .PHONY: db-reset
 db-reset: infra-clean infra-up ## Reset database to fresh state
@@ -129,7 +129,7 @@ db-reset: infra-clean infra-up ## Reset database to fresh state
 
 .PHONY: db-check
 db-check: ## Check database integrity
-	docker-compose exec postgres psql -U postgres -d consonant -c "SELECT * FROM verify_balance_integrity('test_customer_1');"
+	docker-compose exec postgres psql -U postgres -d Beam -c "SELECT * FROM verify_balance_integrity('test_customer_1');"
 
 # =============================================================================
 # REDIS
@@ -155,9 +155,9 @@ redis-stats: ## Show Redis statistics
 test-balance: ## Test balance check with grpcurl
 	@echo "Testing balance check..."
 	grpcurl -plaintext \
-		-H "authorization: Bearer consonant_test_key_1234567890" \
+		-H "authorization: Bearer Beam_test_key_1234567890" \
 		-d '{"customer_id": "test_customer_1"}' \
-		localhost:9090 consonant.balance.v1.BalanceService/GetBalance
+		localhost:9090 Beam.balance.v1.BalanceService/GetBalance
 
 .PHONY: test-health
 test-health: ## Test health endpoint
@@ -183,7 +183,7 @@ test-metrics: ## View Prometheus metrics
 .PHONY: docker-build
 docker-build: ## Build Docker image for backend
 	@echo "Building Docker image..."
-	docker build -f docker/Dockerfile.backend -t consonant-api:latest ./backend
+	docker build -f docker/Dockerfile.backend -t Beam-api:latest ./backend
 
 .PHONY: docker-run
 docker-run: docker-build ## Run backend in Docker
@@ -236,7 +236,7 @@ install-tools: ## Install development tools
 init: install-tools infra-up backend-deps backend-generate backend-build ## Initialize development environment
 	@echo ""
 	@echo "==================================="
-	@echo "Consonant development environment ready!"
+	@echo "Beam development environment ready!"
 	@echo "==================================="
 	@echo ""
 	@echo "Quick start:"

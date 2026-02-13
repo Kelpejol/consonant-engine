@@ -1,215 +1,357 @@
-# Consonant - Real-Time AI Cost Enforcement System
+# ⚡ Beam - Real-Time AI Cost Enforcement
 
-Consonant is a production-grade system for enforcing AI spending limits in real-time. It sits between your application and AI providers (OpenAI, Anthropic, Google) to prevent customers from exceeding their allocated budgets **during streaming**, not after the bill arrives.
+<div align="center">
 
-## 🎯 The Problem We Solve
+**Production-grade system for enforcing AI spending limits in real-time**
 
-B2B SaaS companies charge customers flat monthly fees (like $500/month) but AI costs are completely variable. Some customers cost $5/month, others cost $500/month in AI expenses. Without real-time enforcement, you discover which customers are unprofitable **30 days later** when the bill arrives.
+[![Go Version](https://img.shields.io/badge/Go-1.25+-00ADD8?style=flat&logo=go)](https://golang.org/)
+[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
+[![Docker](https://img.shields.io/badge/Docker-ready-2496ED?logo=docker)](https://hub.docker.com)
 
-Consonant solves this by:
-- **Pre-flight validation**: Check if customer can afford a request before it starts
-- **Streaming enforcement**: Count tokens and deduct grains in real-time as response streams
-- **Kill switch**: Immediately terminate streaming when balance hits zero
-- **Perfect reconciliation**: Use provider's exact token counts for final billing
+[Features](#-features) •
+[Quick Start](#-quick-start) •
+[Architecture](#-architecture) •
+[API Reference](#-api-reference) •
+[Contributing](#-contributing)
 
-## 🏗️ Architecture Overview
+</div>
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                      YOUR APPLICATION                            │
-│  (wrapped with Consonant SDK)                                    │
-└─────────────────┬───────────────────────────────────────────────┘
-                  │
-                  │ 1. Pre-flight check (gRPC)
-                  ↓
-┌─────────────────────────────────────────────────────────────────┐
-│              CONSONANT BACKEND (This Repository)                 │
-│                                                                   │
-│  ┌──────────────┐    ┌─────────────┐    ┌──────────────┐       │
-│  │   gRPC API   │───→│   Ledger    │───→│  Redis (Hot) │       │
-│  │   (Go 1.25)  │    │  (Atomic)   │    │  <1ms ops    │       │
-│  └──────────────┘    └──────┬──────┘    └──────────────┘       │
-│                              │                                    │
-│                              ↓                                    │
-│                      ┌──────────────┐                            │
-│                      │  PostgreSQL  │                            │
-│                      │ (Durable)    │                            │
-│                      │ +TimescaleDB │                            │
-│                      └──────────────┘                            │
-└─────────────────────────────────────────────────────────────────┘
-                  │
-                  │ 2. Request approved, forward to provider
-                  ↓
-┌─────────────────────────────────────────────────────────────────┐
-│              OpenAI / Anthropic / Google                         │
-│              (AI Provider - streaming response)                  │
-└─────────────────────────────────────────────────────────────────┘
-                  │
-                  │ 3. Response streams back through SDK
-                  ↓
-┌─────────────────────────────────────────────────────────────────┐
-│                    CONSONANT SDK                                 │
-│  • Counts tokens in each chunk                                   │
-│  • Batches deductions (every 50 tokens)                         │
-│  • Calls backend to deduct grains                               │
-│  • Kills stream if balance hits zero                            │
-└─────────────────────────────────────────────────────────────────┘
-```
+---
 
-### Key Components
+## 🎯 The Problem
 
-**Backend (Go)**
-- **Ledger**: Atomic balance operations using Redis Lua scripts
-- **gRPC API**: Sub-5ms latency balance checks
-- **PostgreSQL**: Durable storage with complete audit trail
-- **TimescaleDB**: Time-series optimizations for requests table
+B2B SaaS companies charge customers flat monthly fees ($500/month) but AI costs are completely **variable**. Some customers cost $5/month, others cost $500/month in AI expenses. Without real-time enforcement, you discover which customers are unprofitable **30 days later** when the bill arrives.
 
-**SDK (TypeScript/Python)**
-- **Client Wrapper**: Transparent interception of AI client calls
-- **Streaming Interceptor**: Real-time token counting during streaming
-- **Batched Deductions**: Minimize backend traffic (deduct every 50 tokens)
-- **Kill Switch**: Immediate stream termination when balance exhausted
+**Beam solves this by:**
+- ⚡ **Pre-flight validation**: Check if customer can afford a request before it starts
+- 🔄 **Streaming enforcement**: Count tokens and deduct balance in real-time during streaming
+- 🛑 **Kill switch**: Immediately terminate streaming when balance hits zero
+- 💯 **Perfect reconciliation**: Use provider's exact token counts for final billing
+
+## ✨ Features
+
+### Core Engine
+- **Sub-5ms balance checks** via Redis Lua scripts
+- **Atomic operations** prevent race conditions at scale
+- **Dual storage**: Redis for speed, PostgreSQL for durability
+- **Auto-reconciliation** between estimated and actual costs
+- **Multi-provider support**: OpenAI, Anthropic, Google AI
+
+### Production Ready
+- **gRPC API** with Protocol Buffers for efficiency
+- **REST API** for easy integration without gRPC clients
+- **CLI tool** for manual operations and testing
+- **Docker support** with docker-compose for instant setup
+- **TimescaleDB** integration for time-series analytics
+- **Prometheus metrics** for observability
+- **Comprehensive logging** with structured JSON output
+
+### Developer Experience
+- **Standalone**: Works without SDK - direct API calls
+- **Well documented** with examples and guides
+- **Easy setup**: One command to run locally
+- **Type-safe** Protocol Buffer definitions
+- **Tested**: Unit and integration tests included
 
 ## 🚀 Quick Start
 
 ### Prerequisites
-
-- Docker and Docker Compose (for infrastructure)
-- Go 1.25+ (for backend)
-- Node.js 18+ (for TypeScript SDK)
-- Python 3.10+ (for Python SDK)
+- Docker & Docker Compose
+- Go 1.25+ (for building from source)
+- Make (optional, for convenience)
 
 ### 1. Start Infrastructure
 
 ```bash
-# Clone repository
-git clone https://github.com/your-org/consonant-system
-cd consonant-system
+# Clone the repository
+git clone https://github.com/kelpejol/beam
+cd beam
 
 # Start PostgreSQL and Redis
-docker-compose up -d postgres redis
+docker-compose up -d
 
-# Verify services are healthy
+# Wait for services to be ready (about 10 seconds)
 docker-compose ps
-
-# Check logs
-docker-compose logs -f postgres redis
 ```
 
-The database migrations run automatically when PostgreSQL starts. You'll see TimescaleDB tables created with sample data.
-
-### 2. Build and Run Backend
+### 2. Build and Run
 
 ```bash
-cd backend
-
-# Download dependencies
-go mod download
-
-# Generate protobuf code (requires protoc and protoc-gen-go-grpc)
-# protoc --go_out=. --go-grpc_out=. proto/balance/v1/balance.proto
-
-# Build the server
-go build -o bin/api ./cmd/api
+# Build the binary
+make build
 
 # Run the server
-./bin/api
+./backend/bin/beam-api
 
-# You should see:
-# {"level":"info","time":1706234567,"message":"starting consonant api server"}
-# {"level":"info","time":1706234567,"message":"connected to redis"}
-# {"level":"info","time":1706234567,"message":"ledger initialized"}
-# {"level":"info","time":1706234567,"message":"grpc server listening","port":"9090"}
-# {"level":"info","time":1706234567,"message":"http server listening","port":"8080"}
+# Or use Docker
+docker-compose up -d beam-api
 ```
 
 ### 3. Test the API
 
 ```bash
-# Install grpcurl if you don't have it
-# go install github.com/fullstorydev/grpcurl/cmd/grpcurl@latest
+# Using the CLI tool
+./backend/bin/beam-cli balance get --customer-id test_customer_1
 
-# Check balance for test customer
+# Or with grpcurl
 grpcurl -plaintext \
-  -H "authorization: Bearer consonant_test_key_1234567890" \
+  -H "authorization: Bearer beam_test_key_1234567890" \
   -d '{"customer_id": "test_customer_1"}' \
-  localhost:9090 consonant.balance.v1.BalanceService/GetBalance
+  localhost:9090 beam.balance.v1.BalanceService/GetBalance
 
-# Expected response:
-# {
-#   "balance": "100000000",
-#   "reserved": "0",
-#   "available": "100000000"
-# }
+# Or with REST API
+curl -H "Authorization: Bearer beam_test_key_1234567890" \
+  http://localhost:8080/v1/balance/test_customer_1
 ```
 
-### 4. Integrate SDK (Coming Soon)
-
-The TypeScript and Python SDKs will be in `sdk-typescript/` and `sdk-python/` directories. They wrap your existing OpenAI/Anthropic clients transparently.
-
-Example usage (TypeScript):
-```typescript
-import OpenAI from 'openai';
-import { Consonant } from '@consonant/sdk';
-
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-
-// Wrap the client with Consonant
-const consonant = new Consonant({
-  apiKey: process.env.CONSONANT_API_KEY,
-  customerIdExtractor: (ctx) => ctx.userId
-});
-
-const protectedClient = consonant.wrap(openai);
-
-// Use exactly the same API - protection is transparent
-const response = await protectedClient.chat.completions.create({
-  model: 'gpt-4',
-  messages: [{ role: 'user', content: 'Hello!' }],
-  stream: true
-}, { context: { userId: 'user_123' } });
-
-// If customer runs out of balance, SDK throws InsufficientBalanceError
+**Response:**
+```json
+{
+  "balance": "100000000",
+  "reserved": "0",
+  "available": "100000000"
+}
 ```
 
-## 📊 Database Schema
+## 🏗️ Architecture
 
-### Customers Table
-Stores end customers with their current grain balance.
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     YOUR APPLICATION                             │
+└───────────────────────┬─────────────────────────────────────────┘
+                        │
+                        │ gRPC/REST: CheckBalance()
+                        ↓
+┌─────────────────────────────────────────────────────────────────┐
+│                   BEAM BACKEND (Go)                              │
+│                                                                   │
+│  ┌──────────────┐    ┌─────────────┐    ┌──────────────┐       │
+│  │  gRPC/REST   │───→│   Ledger    │───→│ Redis (Hot)  │       │
+│  │    API       │    │  (Atomic)   │    │  <1ms ops    │       │
+│  └──────────────┘    └──────┬──────┘    └──────────────┘       │
+│                              │                                    │
+│                              ↓                                    │
+│                      ┌──────────────┐                            │
+│                      │  PostgreSQL  │                            │
+│                      │  (Durable)   │                            │
+│                      │ +TimescaleDB │                            │
+│                      └──────────────┘                            │
+└─────────────────────────────────────────────────────────────────┘
+                        │
+                        │ Forward to provider after approval
+                        ↓
+┌─────────────────────────────────────────────────────────────────┐
+│              OpenAI / Anthropic / Google AI                      │
+└─────────────────────────────────────────────────────────────────┘
+```
 
+### Key Components
+
+**Ledger** - The heart of Beam
+- Atomic balance operations using Redis Lua scripts
+- Prevents race conditions with reservation system
+- Automatic reconciliation of estimates vs actuals
+
+**Storage Layer**
+- **Redis**: Sub-millisecond balance checks, in-memory state
+- **PostgreSQL**: Durable storage with complete audit trail
+- **TimescaleDB**: Time-series optimizations for analytics
+
+**API Layer**
+- **gRPC**: High-performance binary protocol for production
+- **REST**: HTTP/JSON for easy integration and testing
+- **CLI**: Command-line tool for operations and debugging
+
+## 📊 How It Works
+
+### The Flow
+
+1. **CheckBalance** - Pre-flight validation
+   - Your app calls Beam before making an AI request
+   - Beam checks if customer has enough balance
+   - If yes, reserves grains and returns approval token
+   - **Latency**: 2-4ms
+
+2. **Make AI Request** - Your responsibility
+   - Your app proceeds to call OpenAI/Anthropic/etc
+   - Stream the response to your end user
+   - Count tokens as they arrive
+
+3. **DeductTokens** - Real-time deduction (optional but recommended)
+   - Call Beam every ~50 tokens during streaming
+   - Beam deducts from balance atomically
+   - If balance hits zero, Beam returns `success: false` → **kill the stream**
+   - **Latency**: 1-3ms per call
+
+4. **FinalizeRequest** - Final reconciliation
+   - Call once with exact token counts from provider
+   - Beam reconciles estimated vs actual costs
+   - Refunds overcharges, releases reservation
+   - **Latency**: 3-8ms
+
+## 🔌 API Reference
+
+### REST API Endpoints
+
+**Get Balance** - Query current balance
+```bash
+GET /v1/balance/:customer_id
+Authorization: Bearer <api_key>
+
+Response:
+{
+  "balance": "100000000",
+  "reserved": "5000000",
+  "available": "95000000"
+}
+```
+
+**Check Balance** - Pre-flight validation
+```bash
+POST /v1/balance/check
+Authorization: Bearer <api_key>
+Content-Type: application/json
+
+{
+  "customer_id": "cus_123",
+  "estimated_grains": 50000,
+  "buffer_multiplier": 1.2,
+  "request_id": "req_xyz",
+  "metadata": {
+    "model": "gpt-4",
+    "max_tokens": 1000
+  }
+}
+
+Response:
+{
+  "approved": true,
+  "remaining_balance": "99950000",
+  "request_token": "secure_token_xyz",
+  "reserved_grains": 60000
+}
+```
+
+**Deduct Tokens** - Real-time deduction
+```bash
+POST /v1/balance/deduct
+Authorization: Bearer <api_key>
+Content-Type: application/json
+
+{
+  "customer_id": "cus_123",
+  "request_id": "req_xyz",
+  "request_token": "secure_token_xyz",
+  "tokens_consumed": 50,
+  "model": "gpt-4",
+  "is_completion": true
+}
+
+Response:
+{
+  "success": true,
+  "remaining_balance": "99900000"
+}
+```
+
+**Finalize Request** - Final reconciliation
+```bash
+POST /v1/balance/finalize
+Authorization: Bearer <api_key>
+Content-Type: application/json
+
+{
+  "customer_id": "cus_123",
+  "request_id": "req_xyz",
+  "status": "COMPLETED_SUCCESS",
+  "actual_prompt_tokens": 234,
+  "actual_completion_tokens": 487,
+  "total_actual_cost_grains": 48700,
+  "model": "gpt-4"
+}
+
+Response:
+{
+  "success": true,
+  "refunded_grains": 11300,
+  "final_balance": "99911300"
+}
+```
+
+### gRPC API
+
+Full Protocol Buffer definitions in [`proto/balance/v1/balance.proto`](proto/balance/v1/balance.proto)
+
+```protobuf
+service BalanceService {
+  rpc CheckBalance(CheckBalanceRequest) returns (CheckBalanceResponse);
+  rpc DeductTokens(DeductTokensRequest) returns (DeductTokensResponse);
+  rpc FinalizeRequest(FinalizeRequestRequest) returns (FinalizeRequestResponse);
+  rpc GetBalance(GetBalanceRequest) returns (GetBalanceResponse);
+}
+```
+
+### CLI Tool
+
+```bash
+# Check balance
+beam-cli balance get --customer-id cus_123
+
+# Add balance (credit)
+beam-cli balance add --customer-id cus_123 --amount 1000000 --description "Monthly top-up"
+
+# Deduct balance (debit)
+beam-cli balance deduct --customer-id cus_123 --amount 50000
+
+# List recent requests
+beam-cli requests list --customer-id cus_123 --limit 10
+
+# Show request details
+beam-cli requests show --request-id req_xyz
+
+# Create new customer
+beam-cli customers create --customer-id cus_new --name "New Customer" --balance 10000000
+
+# Verify balance integrity
+beam-cli admin verify-integrity --customer-id cus_123
+
+# Sync Redis from PostgreSQL
+beam-cli admin sync-all
+```
+
+## 💾 Database Schema
+
+### Core Tables
+
+**customers** - End customers with their balances
 ```sql
 CREATE TABLE customers (
     customer_id VARCHAR(255) PRIMARY KEY,
     platform_user_id VARCHAR(255) NOT NULL,
-    name VARCHAR(500),
     current_balance_grains BIGINT NOT NULL DEFAULT 0,
     lifetime_spent_grains BIGINT NOT NULL DEFAULT 0,
     buffer_strategy VARCHAR(20) DEFAULT 'conservative',
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    CONSTRAINT positive_balance CHECK (current_balance_grains >= 0)
 );
 ```
 
-### Transactions Table (TimescaleDB Hypertable)
-Append-only ledger of all grain movements.
-
+**transactions** - Append-only ledger (complete audit trail)
 ```sql
 CREATE TABLE transactions (
     transaction_id VARCHAR(255) PRIMARY KEY,
     customer_id VARCHAR(255) NOT NULL,
-    amount_grains BIGINT NOT NULL,
+    amount_grains BIGINT NOT NULL,  -- Positive=credit, Negative=debit
     transaction_type VARCHAR(50) NOT NULL,
     reference_id VARCHAR(255),
     description TEXT,
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
-
-SELECT create_hypertable('transactions', 'created_at');
 ```
 
-### Requests Table (TimescaleDB Hypertable)
-Detailed record of every AI request for analytics.
-
+**requests** - Detailed AI request tracking
 ```sql
 CREATE TABLE requests (
     request_id VARCHAR(255) PRIMARY KEY,
@@ -218,268 +360,320 @@ CREATE TABLE requests (
     estimated_cost_grains BIGINT NOT NULL,
     reserved_grains BIGINT NOT NULL,
     streaming_deducted_grains BIGINT DEFAULT 0,
-    provider_reported_cost_grains BIGINT,
     actual_cost_grains BIGINT,
     status VARCHAR(50) NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     completed_at TIMESTAMP
 );
-
-SELECT create_hypertable('requests', 'created_at');
 ```
 
 ## 🔐 Security
 
 ### API Authentication
-Every request must include an API key in the authorization header:
+
+Every request requires an API key:
 
 ```
-authorization: Bearer consonant_sk_live_xxxxx
+Authorization: Bearer beam_sk_live_xxxxxxxxxxxxx
 ```
 
-API keys are hashed with SHA-256 and stored in Redis for fast lookup. The plaintext key is never stored.
+- Keys are hashed with SHA-256 before storage
+- Stored in Redis for sub-millisecond authentication
+- Plaintext keys never logged or stored
 
-### Data Protection
-- All communication over TLS in production
-- API keys never logged or exposed
-- Customer data isolated by platform_user_id
-- Database connections use SSL in production
+### Best Practices
+
+- Use different API keys for development and production
+- Rotate keys regularly
+- Enable TLS in production
+- Set appropriate rate limits
+- Monitor for unusual activity
 
 ## 📈 Performance
 
 ### Latency Targets
-- CheckBalance: < 5ms (typically 2-4ms)
-- DeductTokens: < 3ms (typically 1-2ms)
-- FinalizeRequest: < 10ms (typically 3-8ms)
+- **CheckBalance**: < 5ms (typically 2-4ms)
+- **DeductTokens**: < 3ms (typically 1-2ms)
+- **FinalizeRequest**: < 10ms (typically 3-8ms)
 
 ### Throughput
 - 10,000+ concurrent requests per server
-- 100,000+ balance checks per second with horizontal scaling
+- 100,000+ balance checks/second with horizontal scaling
 - Sub-millisecond Redis operations via Lua scripts
 
-### Scaling
-- **Horizontal**: Add more backend instances behind load balancer
-- **Redis**: Shard by customer_id if needed (unlikely until 100k+ customers)
-- **PostgreSQL**: Read replicas for analytics, single primary for writes
+### Scaling Strategies
+
+**Horizontal Scaling**
+```bash
+# Run multiple instances
+docker-compose up -d --scale beam-api=3
+
+# Use load balancer (nginx, haproxy, etc)
+# Configure health checks on /health endpoint
+```
+
+**Redis Scaling**
+- Single Redis handles 100k+ operations/second
+- If needed, shard by customer_id using Redis Cluster
+- Use Redis Sentinel for high availability
+
+**PostgreSQL Scaling**
+- Read replicas for analytics queries
+- Single primary for writes (sufficient for most use cases)
+- Connection pooling prevents bottlenecks
+
+## 🛠️ Development
+
+### Project Structure
+
+```
+beam/
+├── backend/
+│   ├── cmd/
+│   │   ├── api/              # Main server (gRPC + REST)
+│   │   └── cli/              # CLI tool
+│   ├── internal/
+│   │   ├── api/              # gRPC service implementation
+│   │   ├── rest/             # REST API handlers
+│   │   ├── auth/             # API key authentication
+│   │   ├── ledger/           # Core balance logic
+│   │   └── sync/             # Redis-PostgreSQL sync
+│   ├── pkg/proto/            # Generated protobuf code
+│   └── migrations/           # Database migrations
+├── scripts/
+│   ├── lua/                  # Redis Lua scripts
+│   └── load-test.js          # k6 load testing script
+├── docs/                     # Detailed documentation
+├── docker-compose.yml        # Local development environment
+├── Dockerfile                # Production Docker image
+└── Makefile                  # Build automation
+```
+
+### Building from Source
+
+```bash
+# Install dependencies
+go mod download
+
+# Generate protobuf code (requires protoc)
+make proto
+
+# Build all binaries
+make build
+
+# Binaries created at:
+# - backend/bin/beam-api
+# - backend/bin/beam-cli
+```
+
+### Running Tests
+
+```bash
+# Unit tests
+make test
+
+# Integration tests (requires Docker)
+make test-integration
+
+# Test coverage report
+make test-coverage
+
+# Benchmark tests
+make benchmark
+```
+
+### Development Workflow
+
+```bash
+# 1. Start infrastructure
+docker-compose up -d postgres redis
+
+# 2. Run server in dev mode (with auto-reload)
+make dev
+
+# 3. In another terminal, test the API
+./backend/bin/beam-cli balance get --customer-id test_customer_1
+
+# 4. View logs
+docker-compose logs -f beam-api
+
+# 5. Clean up
+make clean
+```
 
 ## 🧪 Testing
 
-```bash
-cd backend
+### Manual API Testing
 
-# Run all tests
-go test ./...
-
-# Run with race detector
-go test -race ./...
-
-# Run specific package
-go test ./internal/ledger/...
-
-# Run with coverage
-go test -cover ./...
-```
-
-## 🐛 Debugging
-
-### Check Redis State
+Complete example workflow:
 
 ```bash
-# Connect to Redis
-docker-compose exec redis redis-cli
+# 1. Check initial balance
+curl -H "Authorization: Bearer beam_test_key_1234567890" \
+  http://localhost:8080/v1/balance/test_customer_1
 
-# Check customer balance
-GET customer:balance:test_customer_1
+# 2. Pre-flight check (reserve grains)
+curl -X POST -H "Authorization: Bearer beam_test_key_1234567890" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "customer_id": "test_customer_1",
+    "estimated_grains": 50000,
+    "buffer_multiplier": 1.2,
+    "request_id": "req_test_'$(date +%s)'",
+    "metadata": {"model": "gpt-4"}
+  }' \
+  http://localhost:8080/v1/balance/check
 
-# Check reserved grains
-GET customer:reserved:test_customer_1
+# Save the request_token from response, then:
 
-# List all request tracking hashes
-SCAN 0 MATCH request:*
+# 3. Simulate streaming deductions (repeat as needed)
+curl -X POST -H "Authorization: Bearer beam_test_key_1234567890" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "customer_id": "test_customer_1",
+    "request_id": "req_test_'$(date +%s)'",
+    "request_token": "YOUR_TOKEN_HERE",
+    "tokens_consumed": 50,
+    "model": "gpt-4",
+    "is_completion": true
+  }' \
+  http://localhost:8080/v1/balance/deduct
 
-# Inspect specific request
-HGETALL request:req_xyz123
+# 4. Finalize with exact costs
+curl -X POST -H "Authorization: Bearer beam_test_key_1234567890" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "customer_id": "test_customer_1",
+    "request_id": "req_test_'$(date +%s)'",
+    "status": "COMPLETED_SUCCESS",
+    "actual_prompt_tokens": 234,
+    "actual_completion_tokens": 487,
+    "total_actual_cost_grains": 48700,
+    "model": "gpt-4"
+  }' \
+  http://localhost:8080/v1/balance/finalize
+
+# 5. Verify final balance
+curl -H "Authorization: Bearer beam_test_key_1234567890" \
+  http://localhost:8080/v1/balance/test_customer_1
 ```
 
-### Check PostgreSQL State
+### Load Testing
 
 ```bash
-# Connect to database
-docker-compose exec postgres psql -U postgres -d consonant
+# Install k6
+brew install k6  # macOS
+# or: https://k6.io/docs/getting-started/installation
 
-# Check customer balances
-SELECT customer_id, name, current_balance_grains, 
-       current_balance_grains / 1000000 AS balance_dollars
-FROM customers;
+# Run load test
+k6 run scripts/load-test.js
 
-# Check recent transactions
-SELECT * FROM transactions 
-ORDER BY created_at DESC 
-LIMIT 10;
-
-# Check recent requests
-SELECT request_id, customer_id, model, status,
-       actual_cost_grains / 1000000 AS cost_dollars
-FROM requests 
-ORDER BY created_at DESC 
-LIMIT 10;
-
-# Verify balance integrity for a customer
-SELECT * FROM verify_balance_integrity('test_customer_1');
+# Custom scenario
+k6 run --vus 100 --duration 30s scripts/load-test.js
 ```
 
-### View Logs
+## 📚 Documentation
 
-```bash
-# Backend logs (if running directly)
-./bin/api
+Comprehensive guides available in [`docs/`](docs/):
 
-# Backend logs (if running via docker-compose)
-docker-compose logs -f api
-
-# Filter for specific customer
-docker-compose logs api | grep "customer_id=test_customer_1"
-
-# Filter for errors
-docker-compose logs api | grep "level=error"
-```
-
-## 🚨 Common Issues
-
-### "Failed to connect to redis"
-- Ensure Redis is running: `docker-compose ps redis`
-- Check Redis is healthy: `docker-compose exec redis redis-cli ping`
-- Verify Redis port: `netstat -an | grep 6379`
-
-### "Failed to connect to postgres"
-- Ensure PostgreSQL is running: `docker-compose ps postgres`
-- Check PostgreSQL is healthy: `docker-compose exec postgres pg_isready`
-- Verify credentials match docker-compose.yml
-
-### "Invalid API key"
-- API key not stored in Redis
-- For development, the test key `consonant_test_key_1234567890` is auto-stored
-- Check Redis: `docker-compose exec redis redis-cli GET apikey:<hash>`
-
-### "Request not found" during deduction
-- Request tracking hash expired (TTL = 1 hour)
-- Usually means request took too long or SDK crashed mid-stream
-- Check request status in PostgreSQL: `SELECT * FROM requests WHERE request_id = '...'`
-
-## 📝 Production Deployment
-
-### Environment Variables
-
-```bash
-# Required
-export GRPC_PORT=9090
-export HTTP_PORT=8080
-export REDIS_ADDR=redis.production.example.com:6379
-export POSTGRES_URL=postgres://user:pass@postgres.example.com:5432/consonant?sslmode=require
-export ENVIRONMENT=production
-
-# Optional
-export LOG_LEVEL=info
-export GRPC_MAX_RECV_MSG_SIZE=4194304
-export GRPC_MAX_SEND_MSG_SIZE=4194304
-```
-
-### Kubernetes Deployment
-
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: consonant-api
-spec:
-  replicas: 3
-  selector:
-    matchLabels:
-      app: consonant-api
-  template:
-    metadata:
-      labels:
-        app: consonant-api
-    spec:
-      containers:
-      - name: api
-        image: your-registry/consonant-api:latest
-        ports:
-        - containerPort: 9090
-          name: grpc
-        - containerPort: 8080
-          name: http
-        env:
-        - name: REDIS_ADDR
-          value: "redis-service:6379"
-        - name: POSTGRES_URL
-          valueFrom:
-            secretKeyRef:
-              name: consonant-secrets
-              key: postgres-url
-        livenessProbe:
-          httpGet:
-            path: /health
-            port: 8080
-          initialDelaySeconds: 10
-          periodSeconds: 30
-        readinessProbe:
-          httpGet:
-            path: /ready
-            port: 8080
-          initialDelaySeconds: 5
-          periodSeconds: 10
-```
-
-## 🔧 Configuration
-
-### Buffer Strategy
-Controls how conservative pre-flight reservations are:
-
-- **Conservative (1.2x)**: Reserve 20% more than estimated
-  - Safer but may reject requests unnecessarily
-  - Recommended for production
-  
-- **Aggressive (1.0x)**: Reserve exact estimate
-  - Maximizes utilization
-  - Slightly higher risk of overruns
-
-### Grain Conversion
-1 million grains = $1 by default. This gives 6 decimal places of precision for accurate tracking of fractional-cent costs.
-
-Example:
-- Customer pays $500/month
-- You allocate 50% to AI costs = $250
-- Customer gets 250,000,000 grains
-
-## 📚 Additional Documentation
-
-- [Architecture Deep Dive](docs/architecture.md) - Complete system design
-- [API Reference](docs/api.md) - gRPC method documentation  
-- [SDK Usage](docs/sdk.md) - Integration examples
-- [Ops Runbook](docs/ops.md) - Operational procedures
-- [Performance Tuning](docs/performance.md) - Optimization guide
+- [**API Reference**](docs/API.md) - Complete API documentation with examples
+- [**Architecture Deep Dive**](docs/ARCHITECTURE.md) - System design and decisions
+- [**Integration Guide**](docs/INTEGRATION.md) - How to integrate Beam into your app
+- [**Operations Guide**](docs/OPERATIONS.md) - Production deployment and monitoring
+- [**Performance Tuning**](docs/PERFORMANCE.md) - Optimization strategies
+- [**Database Guide**](docs/DATABASE.md) - Schema details and queries
 
 ## 🤝 Contributing
 
-Contributions are welcome! Please read our [Contributing Guide](CONTRIBUTING.md) first.
+We love contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+### Quick Contribution Guide
+
+1. **Fork** the repository
+2. **Create** a feature branch (`git checkout -b feature/amazing-feature`)
+3. **Make** your changes
+4. **Test** thoroughly (`make test`)
+5. **Commit** (`git commit -m 'Add amazing feature'`)
+6. **Push** (`git push origin feature/amazing-feature`)
+7. **Open** a Pull Request
+
+### Development Standards
+
+- Follow [Effective Go](https://golang.org/doc/effective_go) guidelines
+- Write tests for new features (maintain >80% coverage)
+- Update documentation for API changes
+- Use conventional commit messages
+- Add examples for new features
+
+## 🐛 Known Issues & Roadmap
+
+### Known Issues
+- None! (Please report any issues you find)
+
+### Roadmap
+
+**v1.0** (Current)
+- ✅ Core balance operations
+- ✅ gRPC and REST APIs
+- ✅ CLI tool
+- ✅ Docker support
+- ✅ TimescaleDB integration
+
+**v1.1** (Planned)
+- [ ] WebSocket API for real-time balance updates
+- [ ] GraphQL API
+- [ ] Multi-region deployment support
+- [ ] Advanced analytics dashboard
+
+**v2.0** (Future)
+- [ ] Multi-currency support
+- [ ] Automatic cost optimization recommendations
+- [ ] Machine learning for cost prediction
+- [ ] Stripe/payment provider integrations
 
 ## 📄 License
 
-MIT License - see [LICENSE](LICENSE) for details.
+This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
+
+### What this means:
+- ✅ Commercial use allowed
+- ✅ Modification allowed
+- ✅ Distribution allowed
+- ✅ Private use allowed
+- ⚠️ No warranty provided
+- ⚠️ No liability
 
 ## 🙏 Acknowledgments
 
-Built with:
-- [Go](https://golang.org/) - Backend implementation
-- [gRPC](https://grpc.io/) - High-performance RPC framework
-- [Redis](https://redis.io/) - In-memory data structure store
-- [PostgreSQL](https://www.postgresql.org/) - Relational database
-- [TimescaleDB](https://www.timescale.com/) - Time-series database extension
-- [zerolog](https://github.com/rs/zerolog) - Structured logging
+Built with amazing open source tools:
 
-## 📞 Support
+- [**Go**](https://golang.org/) - Efficient, concurrent backend language
+- [**gRPC**](https://grpc.io/) - High-performance RPC framework
+- [**Protocol Buffers**](https://developers.google.com/protocol-buffers) - Type-safe serialization
+- [**Redis**](https://redis.io/) - Lightning-fast in-memory database
+- [**PostgreSQL**](https://www.postgresql.org/) - Rock-solid relational database
+- [**TimescaleDB**](https://www.timescale.com/) - Time-series superpowers for PostgreSQL
+- [**zerolog**](https://github.com/rs/zerolog) - Zero-allocation structured logging
 
-- Issues: [GitHub Issues](https://github.com/your-org/consonant/issues)
-- Discussions: [GitHub Discussions](https://github.com/your-org/consonant/discussions)
-- Email: support@consonant.dev
+Special thanks to all contributors and users!
+
+## 💬 Community & Support
+
+- **GitHub Issues**: [Report bugs](https://github.com/yourusername/beam/issues)
+- **GitHub Discussions**: [Ask questions](https://github.com/yourusername/beam/discussions)
+- **Documentation**: [Read the docs](docs/)
+- **Examples**: [See examples](examples/)
+
+## ⭐ Star Us!
+
+If you find Beam useful, please consider giving it a star on GitHub! It helps others discover the project.
+
+---
+
+<div align="center">
+
+**Made with ⚡ by developers, for developers**
+
+[Documentation](docs/) • [Contributing](CONTRIBUTING.md) • [License](LICENSE) • [Changelog](CHANGELOG.md)
+
+</div>

@@ -1,10 +1,10 @@
 // Package auth provides API key authentication for gRPC requests.
 //
-// Every request to the Consonant backend must include a valid API key in the
+// Every request to the Beam backend must include a valid API key in the
 // gRPC metadata. This package validates those keys and returns the platform
 // user ID associated with the key.
 //
-// API keys are secrets that identify which Consonant user (B2B SaaS founder)
+// API keys are secrets that identify which Beam user (B2B SaaS founder)
 // is making the request. We never store the actual key in plaintext - only
 // a SHA-256 hash of the key is stored in the database.
 //
@@ -53,7 +53,7 @@ func NewAuthenticator(rdb *redis.Client, logger zerolog.Logger) *Authenticator {
 // This function is called at the start of every gRPC request handler to
 // authenticate the request. It's in the hot path so performance matters.
 //
-// Expected header format: "authorization: Bearer consonant_sk_live_xxxxx"
+// Expected header format: "authorization: Bearer Beam_sk_live_xxxxx"
 //
 // Returns the platform_user_id if authentication succeeds, error otherwise.
 //

@@ -1,4 +1,4 @@
-// Package api implements the gRPC services for Consonant.
+// Package api implements the gRPC services for Beam.
 //
 // This package is the interface layer between external clients (SDKs) and
 // internal business logic (ledger operations). Every gRPC request flows
@@ -28,9 +28,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/consonant/backend/internal/auth"
-	"github.com/consonant/backend/internal/ledger"
-	pb "github.com/consonant/backend/pkg/proto/balance/v1"
+	"github.com/Beam/backend/internal/auth"
+	"github.com/Beam/backend/internal/ledger"
+	pb "github.com/Beam/backend/pkg/proto/balance/v1"
 	"github.com/rs/zerolog"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -414,7 +414,7 @@ func (s *BalanceService) GetBalance(ctx context.Context, req *pb.GetBalanceReque
 // for preventing basic replay attacks.
 func (s *BalanceService) generateRequestToken(requestID, customerID string) string {
 	// In production, get this from environment variable or secret manager
-	secretKey := "consonant_secret_key_change_in_production"
+	secretKey := "Beam_secret_key_change_in_production"
 
 	data := fmt.Sprintf("%s:%s:%s", requestID, customerID, secretKey)
 	hash := sha256.Sum256([]byte(data))

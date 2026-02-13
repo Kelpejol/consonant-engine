@@ -1,8 +1,8 @@
 -- 001_initial_schema.up.sql
 --
--- Purpose: Create the complete Consonant database schema with TimescaleDB extensions.
+-- Purpose: Create the complete Beam database schema with TimescaleDB extensions.
 --
--- This migration creates all tables needed for production operation of Consonant.
+-- This migration creates all tables needed for production operation of Beam.
 -- The schema is designed for:
 -- - ACID compliance for financial transactions
 -- - Time-series query performance via TimescaleDB
@@ -15,7 +15,7 @@
 -- - TimescaleDB 2.10 or later
 --
 -- Usage:
---   psql -d consonant -f 001_initial_schema.up.sql
+--   psql -d Beam -f 001_initial_schema.up.sql
 
 -- Enable TimescaleDB extension (Removed for standard Postgres compatibility)
 -- CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE;
@@ -29,14 +29,14 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 -- Purpose: Stores end customers of our users (B2B SaaS companies).
 -- Each customer represents an end user of our user's application.
 --
--- Example: If "Acme Corp" uses Consonant, and Acme has a customer "Widget Inc",
+-- Example: If "Acme Corp" uses Beam, and Acme has a customer "Widget Inc",
 -- then "Widget Inc" is a row in this table.
 
 CREATE TABLE customers (
     -- Primary identifier for this customer
     customer_id VARCHAR(255) PRIMARY KEY,
     
-    -- Which Consonant platform user owns this customer
+    -- Which Beam platform user owns this customer
     -- This would link to platform_users table if we were building the SaaS layer
     -- For now, this is the API key owner identifier
     platform_user_id VARCHAR(255) NOT NULL,
@@ -254,7 +254,7 @@ CREATE INDEX idx_requests_integrity_issues ON requests(has_integrity_issue)
 -- ============================================================================
 -- PLATFORM_USERS TABLE
 -- ============================================================================
--- Purpose: Consonant users (the B2B SaaS founders using our system)
+-- Purpose: Beam users (the B2B SaaS founders using our system)
 -- This is a simplified version - full SaaS platform would have more fields
 
 CREATE TABLE platform_users (
@@ -395,10 +395,10 @@ $$ LANGUAGE plpgsql;
 -- COMMENTS FOR DOCUMENTATION
 -- ============================================================================
 
-COMMENT ON TABLE customers IS 'End customers of Consonant users (B2B SaaS companies end users)';
+COMMENT ON TABLE customers IS 'End customers of Beam users (B2B SaaS companies end users)';
 COMMENT ON TABLE transactions IS 'Append-only ledger of all grain movements (complete audit trail)';
 COMMENT ON TABLE requests IS 'Detailed record of every AI request for analytics and debugging';
-COMMENT ON TABLE platform_users IS 'Consonant users (B2B SaaS founders using the system)';
+COMMENT ON TABLE platform_users IS 'Beam users (B2B SaaS founders using the system)';
 COMMENT ON TABLE model_pricing IS 'AI model pricing with historical versioning';
 
 COMMENT ON COLUMN customers.current_balance_grains IS 'Source of truth for customer balance (syncs to Redis)';
@@ -410,12 +410,12 @@ COMMENT ON COLUMN requests.reconciliation_difference_grains IS 'Positive=refunde
 -- ============================================================================
 
 -- Create a test platform user for development
--- API key: consonant_test_key_1234567890
+-- API key: Beam_test_key_1234567890
 -- API key hash: SHA-256 of above
 INSERT INTO platform_users (user_id, email, company_name, api_key_hash, grains_per_dollar)
 VALUES (
     'test_user_1',
-    'test@consonant.dev',
+    'test@Beam.dev',
     'Test Company',
     '5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8',
     1000000
@@ -445,7 +445,7 @@ VALUES (
 -- COMPLETION
 -- ============================================================================
 
-COMMENT ON DATABASE consonant IS 'Consonant - Real-time AI cost enforcement system';
+COMMENT ON DATABASE Beam IS 'Beam - Real-time AI cost enforcement system';
 
 -- Verify the migration succeeded
 DO $$
@@ -453,6 +453,6 @@ BEGIN
     RAISE NOTICE 'Migration 001_initial_schema.up.sql completed successfully';
     RAISE NOTICE 'Tables created: customers, transactions, requests, platform_users, model_pricing';
     RAISE NOTICE 'TimescaleDB hypertables: transactions, requests';
-    RAISE NOTICE 'Test user created: test@consonant.dev';
+    RAISE NOTICE 'Test user created: test@Beam.dev';
     RAISE NOTICE 'Test customer created: test_customer_1 with 100M grains';
 END $$;

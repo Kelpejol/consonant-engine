@@ -1,4 +1,4 @@
-// balance.proto defines the gRPC service contract for Consonant's balance checking API.
+// balance.proto defines the gRPC service contract for Beam's balance checking API.
 //
 // This protocol defines the three critical operations that enable real-time AI cost enforcement:
 // 1. CheckBalance - Pre-flight validation before AI requests (must complete in <5ms)
@@ -10,9 +10,9 @@
 
 syntax = "proto3";
 
-package consonant.balance.v1;
+package Beam.balance.v1;
 
-option go_package = "github.com/consonant/backend/pkg/proto/balance/v1;balancev1";
+option go_package = "github.com/Beam/backend/pkg/proto/balance/v1;balancev1";
 
 // BalanceService provides real-time AI cost enforcement operations.
 //

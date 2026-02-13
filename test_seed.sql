@@ -1,20 +1,20 @@
 -- test_seed.sql
 --
--- Purpose: Load initial test data into the Consonant database.
+-- Purpose: Load initial test data into the Beam database.
 -- This creates a test user, test customer, and sets up model pricing.
 --
 -- Usage:
---   psql -d consonant < test_seed.sql
+--   psql -d Beam < test_seed.sql
 
 -- 1. Create a test platform user (the developer using our SDK)
--- API key: consonant_test_key_1234567890
+-- API key: Beam_test_key_1234567890
 -- Hash: SHA-256 of the above key
 INSERT INTO platform_users (user_id, email, company_name, api_key_hash, grains_per_dollar)
 VALUES (
     'test_user_1',
-    'test@consonant.dev',
+    'test@Beam.dev',
     'Test Company',
-    '5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8', -- SHA256('consonant_test_key_1234567890')
+    '5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8', -- SHA256('Beam_test_key_1234567890')
     1000000 -- 1M grains = $1
 )
 ON CONFLICT (user_id) DO UPDATE SET
@@ -63,6 +63,6 @@ ON CONFLICT (model_name, provider, effective_from) DO UPDATE SET
 DO $$
 BEGIN
     RAISE NOTICE 'Test seed data loaded successfully.';
-    RAISE NOTICE 'Test User API Key: consonant_test_key_1234567890';
+    RAISE NOTICE 'Test User API Key: Beam_test_key_1234567890';
     RAISE NOTICE 'Test Customer: test_customer_1 (Balance: 100M grains)';
 END $$;

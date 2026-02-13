@@ -5,7 +5,7 @@
 -- multiple simultaneous requests all check the balance, see enough funds, and all
 -- proceed even though collectively they exceed the available balance.
 --
--- This script is THE CORE of Consonant's correctness guarantees. It must be perfect.
+-- This script is THE CORE of Beam's correctness guarantees. It must be perfect.
 --
 -- Performance: Executes in under 1 millisecond in Redis
 -- Atomicity: Guaranteed by Redis single-threaded execution model

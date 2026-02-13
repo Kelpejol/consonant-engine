@@ -1,4 +1,4 @@
-// Package main is the entry point for the Consonant API server.
+// Package main is the entry point for the Beam API server.
 //
 // This server exposes the gRPC Balance API that SDKs connect to for real-time
 // AI cost enforcement. The server is designed for production operation with:
@@ -36,11 +36,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/consonant/backend/internal/api"
-	"github.com/consonant/backend/internal/auth"
-	"github.com/consonant/backend/internal/ledger"
-	"github.com/consonant/backend/internal/sync"
-	pb "github.com/consonant/backend/pkg/proto/balance/v1"
+	"github.com/Beam/backend/internal/api"
+	"github.com/Beam/backend/internal/auth"
+	"github.com/Beam/backend/internal/ledger"
+	"github.com/Beam/backend/internal/sync"
+	pb "github.com/Beam/backend/pkg/proto/balance/v1"
 	"github.com/go-redis/redis/v8"
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	grpc_recovery "github.com/grpc-ecosystem/go-grpc-middleware/recovery"
@@ -72,7 +72,7 @@ func LoadConfig() *Config {
 		HTTPPort:     getEnv("HTTP_PORT", "8080"),
 		RedisAddr:     getEnv("REDIS_ADDR", "localhost:6379"),
 		RedisPassword: getEnv("REDIS_PASSWORD", ""),
-		PostgresURL:   getEnv("POSTGRES_URL", "postgres://postgres:postgres@localhost:5432/consonant?sslmode=disable"),
+		PostgresURL:   getEnv("POSTGRES_URL", "postgres://postgres:postgres@localhost:5432/Beam?sslmode=disable"),
 		LogLevel:      getEnv("LOG_LEVEL", "info"),
 		Environment:   getEnv("ENVIRONMENT", "development"),
 	}
@@ -95,7 +95,7 @@ func main() {
 		Str("environment", cfg.Environment).
 		Str("grpc_port", cfg.GRPCPort).
 		Str("http_port", cfg.HTTPPort).
-		Msg("starting consonant api server")
+		Msg("starting Beam api server")
 
 	// Initialize Redis connection
 	redisClient := redis.NewClient(&redis.Options{
@@ -157,11 +157,11 @@ func main() {
 
 	// For development, store a test API key
 	if cfg.Environment == "development" {
-		testKey := "consonant_test_key_1234567890"
+		testKey := "Beam_test_key_1234567890"
 		if err := authenticator.StoreAPIKey(context.Background(), testKey, "test_user_1"); err != nil {
 			logger.Warn().Err(err).Msg("failed to store test API key")
 		} else {
-			logger.Info().Msg("test API key stored: consonant_test_key_1234567890")
+			logger.Info().Msg("test API key stored: Beam_test_key_1234567890")
 		}
 	}
 
@@ -258,7 +258,7 @@ func setupLogger(levelStr, environment string) zerolog.Logger {
 			Level(level).
 			With().
 			Timestamp().
-			Str("service", "consonant-api").
+			Str("service", "Beam-api").
 			Str("environment", environment).
 			Logger()
 	}

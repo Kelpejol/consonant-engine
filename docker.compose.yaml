@@ -1,11 +1,11 @@
 # docker-compose.yml
 #
-# Purpose: Complete local development environment for Consonant
+# Purpose: Complete local development environment for Beam
 #
 # This compose file starts:
 # 1. PostgreSQL with TimescaleDB extension
 # 2. Redis for hot path operations
-# 3. The Consonant API server (when you build it)
+# 3. The Beam API server (when you build it)
 #
 # Usage:
 #   docker-compose up -d          # Start all services
@@ -25,11 +25,11 @@ services:
   # PostgreSQL with TimescaleDB for durable storage
   postgres:
     image: timescale/timescaledb:latest-pg14
-    container_name: consonant-postgres
+    container_name: Beam-postgres
     restart: unless-stopped
     
     environment:
-      POSTGRES_DB: consonant
+      POSTGRES_DB: Beam
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       # Performance tuning for development
@@ -48,18 +48,18 @@ services:
       - ./backend/migrations:/docker-entrypoint-initdb.d
     
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d consonant"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d Beam"]
       interval: 10s
       timeout: 5s
       retries: 5
     
     networks:
-      - consonant-network
+      - Beam-network
 
   # Redis for hot path balance operations
   redis:
     image: redis:7-alpine
-    container_name: consonant-redis
+    container_name: Beam-redis
     restart: unless-stopped
     
     command: >
@@ -84,14 +84,14 @@ services:
       retries: 5
     
     networks:
-      - consonant-network
+      - Beam-network
 
-  # Consonant API server (uncomment after building)
+  # Beam API server (uncomment after building)
   # api:
   #   build:
   #     context: ./backend
   #     dockerfile: ../docker/Dockerfile.backend
-  #   container_name: consonant-api
+  #   container_name: Beam-api
   #   restart: unless-stopped
   #   
   #   depends_on:
@@ -104,7 +104,7 @@ services:
   #     GRPC_PORT: 9090
   #     HTTP_PORT: 8080
   #     REDIS_ADDR: redis:6379
-  #     POSTGRES_URL: postgres://postgres:postgres@postgres:5432/consonant?sslmode=disable
+  #     POSTGRES_URL: postgres://postgres:postgres@postgres:5432/Beam?sslmode=disable
   #     LOG_LEVEL: debug
   #     ENVIRONMENT: development
   #   
@@ -119,16 +119,16 @@ services:
   #     retries: 5
   #   
   #   networks:
-  #     - consonant-network
+  #     - Beam-network
 
   # pgAdmin for database management (optional)
   pgadmin:
     image: dpage/pgadmin4:latest
-    container_name: consonant-pgadmin
+    container_name: Beam-pgadmin
     restart: unless-stopped
     
     environment:
-      PGADMIN_DEFAULT_EMAIL: admin@consonant.dev
+      PGADMIN_DEFAULT_EMAIL: admin@Beam.dev
       PGADMIN_DEFAULT_PASSWORD: admin
       PGADMIN_CONFIG_SERVER_MODE: 'False'
     
@@ -139,12 +139,12 @@ services:
       - pgadmin_data:/var/lib/pgadmin
     
     networks:
-      - consonant-network
+      - Beam-network
 
   # Redis Commander for Redis inspection (optional)
   redis-commander:
     image: rediscommander/redis-commander:latest
-    container_name: consonant-redis-commander
+    container_name: Beam-redis-commander
     restart: unless-stopped
     
     environment:
@@ -154,7 +154,7 @@ services:
       - "8081:8081"
     
     networks:
-      - consonant-network
+      - Beam-network
 
 volumes:
   postgres_data:
@@ -165,7 +165,7 @@ volumes:
     driver: local
 
 networks:
-  consonant-network:
+  Beam-network:
     driver: bridge
 
 # =============================================================================
@@ -179,12 +179,12 @@ networks:
 #    $ docker-compose ps
 #
 # 3. Run migrations (already done automatically via init scripts):
-#    $ docker-compose exec postgres psql -U postgres -d consonant -c "\dt"
+#    $ docker-compose exec postgres psql -U postgres -d Beam -c "\dt"
 #
 # 4. Access services:
 #    - PostgreSQL: localhost:5432 (user: postgres, pass: postgres)
 #    - Redis: localhost:6379
-#    - pgAdmin: http://localhost:5050 (email: admin@consonant.dev, pass: admin)
+#    - pgAdmin: http://localhost:5050 (email: admin@Beam.dev, pass: admin)
 #    - Redis Commander: http://localhost:8081
 #
 # 5. Build and run the API server:
@@ -197,7 +197,7 @@ networks:
 #
 # 6. Test the API with grpcurl:
 #    $ grpcurl -plaintext -d '{"customer_id": "test_customer_1"}' \
-#      localhost:9090 consonant.balance.v1.BalanceService/GetBalance
+#      localhost:9090 Beam.balance.v1.BalanceService/GetBalance
 #
 # 7. View logs:
 #    $ docker-compose logs -f postgres

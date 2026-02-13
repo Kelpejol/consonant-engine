@@ -1,6 +1,6 @@
 // Package ledger provides atomic balance management using Redis and PostgreSQL.
 //
-// This is the core financial engine of Consonant. Every grain that moves through
+// This is the core financial engine of Beam. Every grain that moves through
 // the system flows through this package. The ledger maintains two synchronized
 // data stores:
 //
