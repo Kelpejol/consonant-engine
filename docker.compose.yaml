@@ -1,41 +1,38 @@
-# docker-compose.yml
+# docker-compose.yml for Beam
 #
-# Purpose: Complete local development environment for Beam
+# Complete local development and production environment for Beam
 #
-# This compose file starts:
-# 1. PostgreSQL with TimescaleDB extension
-# 2. Redis for hot path operations
-# 3. The Beam API server (when you build it)
+# Services:
+#   - PostgreSQL: Durable storage with TimescaleDB for time-series data
+#   - Redis: Hot path operations (sub-millisecond balance checks)
+#   - Beam API: Main gRPC + REST server
+#   - pgAdmin: Database management UI (optional)
+#   - Redis Commander: Redis inspection UI (optional)
 #
 # Usage:
-#   docker-compose up -d          # Start all services
-#   docker-compose logs -f api    # Follow API logs
-#   docker-compose down           # Stop all services
-#   docker-compose down -v        # Stop and remove volumes (fresh start)
-#
-# The services are configured with:
-# - Persistent volumes for data
-# - Health checks for reliability
-# - Exposed ports for development access
-# - Environment variables for configuration
+#   docker-compose up -d           # Start all services
+#   docker-compose logs -f beam-api  # Follow API logs
+#   docker-compose down            # Stop all services
+#   docker-compose down -v         # Stop and remove volumes (fresh start)
 
 version: '3.8'
 
 services:
   # PostgreSQL with TimescaleDB for durable storage
   postgres:
-    image: timescale/timescaledb:latest-pg14
-    container_name: Beam-postgres
+    image: timescale/timescaledb:latest-pg16
+    container_name: beam-postgres
     restart: unless-stopped
     
     environment:
-      POSTGRES_DB: Beam
+      POSTGRES_DB: beam
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-      # Performance tuning for development
-      # In production, these would be much higher
+      # Performance tuning
       POSTGRES_SHARED_BUFFERS: 256MB
       POSTGRES_MAX_CONNECTIONS: 100
+      POSTGRES_EFFECTIVE_CACHE_SIZE: 1GB
+      POSTGRES_WORK_MEM: 16MB
     
     ports:
       - "5432:5432"
@@ -48,18 +45,19 @@ services:
       - ./backend/migrations:/docker-entrypoint-initdb.d
     
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d Beam"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d beam"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 10s
     
     networks:
-      - Beam-network
+      - beam-network
 
   # Redis for hot path balance operations
   redis:
     image: redis:7-alpine
-    container_name: Beam-redis
+    container_name: beam-redis
     restart: unless-stopped
     
     command: >
@@ -82,53 +80,78 @@ services:
       interval: 10s
       timeout: 3s
       retries: 5
+      start_period: 5s
     
     networks:
-      - Beam-network
+      - beam-network
 
-  # Beam API server (uncomment after building)
-  # api:
-  #   build:
-  #     context: ./backend
-  #     dockerfile: ../docker/Dockerfile.backend
-  #   container_name: Beam-api
-  #   restart: unless-stopped
-  #   
-  #   depends_on:
-  #     postgres:
-  #       condition: service_healthy
-  #     redis:
-  #       condition: service_healthy
-  #   
-  #   environment:
-  #     GRPC_PORT: 9090
-  #     HTTP_PORT: 8080
-  #     REDIS_ADDR: redis:6379
-  #     POSTGRES_URL: postgres://postgres:postgres@postgres:5432/Beam?sslmode=disable
-  #     LOG_LEVEL: debug
-  #     ENVIRONMENT: development
-  #   
-  #   ports:
-  #     - "9090:9090"  # gRPC
-  #     - "8080:8080"  # HTTP (health checks, metrics)
-  #   
-  #   healthcheck:
-  #     test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:8080/health"]
-  #     interval: 10s
-  #     timeout: 5s
-  #     retries: 5
-  #   
-  #   networks:
-  #     - Beam-network
-
-  # pgAdmin for database management (optional)
-  pgadmin:
-    image: dpage/pgadmin4:latest
-    container_name: Beam-pgadmin
+  # Beam API server (gRPC + REST)
+  beam-api:
+    build:
+      context: ./backend
+      dockerfile: ../docker/Dockerfile
+      args:
+        GO_VERSION: "1.25"
+    container_name: beam-api
     restart: unless-stopped
     
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    
     environment:
-      PGADMIN_DEFAULT_EMAIL: admin@Beam.dev
+      # Server ports
+      GRPC_PORT: "9090"
+      HTTP_PORT: "8080"
+      
+      # Database connections
+      REDIS_ADDR: "redis:6379"
+      POSTGRES_URL: "postgres://postgres:postgres@postgres:5432/beam?sslmode=disable"
+      
+      # Application config
+      LOG_LEVEL: "debug"
+      ENVIRONMENT: "development"
+      
+      # Optional: Enable detailed metrics
+      ENABLE_METRICS: "true"
+      ENABLE_PROFILING: "false"
+    
+    ports:
+      - "9090:9090"  # gRPC
+      - "8080:8080"  # HTTP (REST + health checks + metrics)
+    
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    
+    networks:
+      - beam-network
+    
+    # Resource limits (adjust for production)
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+
+  # pgAdmin for database management (optional, disable in production)
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: beam-pgadmin
+    restart: unless-stopped
+    profiles:
+      - tools  # Only start with --profile tools
+    
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@beam.dev
       PGADMIN_DEFAULT_PASSWORD: admin
       PGADMIN_CONFIG_SERVER_MODE: 'False'
     
@@ -139,13 +162,15 @@ services:
       - pgadmin_data:/var/lib/pgadmin
     
     networks:
-      - Beam-network
+      - beam-network
 
-  # Redis Commander for Redis inspection (optional)
+  # Redis Commander for Redis inspection (optional, disable in production)
   redis-commander:
     image: rediscommander/redis-commander:latest
-    container_name: Beam-redis-commander
+    container_name: beam-redis-commander
     restart: unless-stopped
+    profiles:
+      - tools  # Only start with --profile tools
     
     environment:
       REDIS_HOSTS: local:redis:6379
@@ -154,7 +179,53 @@ services:
       - "8081:8081"
     
     networks:
-      - Beam-network
+      - beam-network
+
+  # Prometheus for metrics collection (optional)
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: beam-prometheus
+    restart: unless-stopped
+    profiles:
+      - monitoring
+    
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+    
+    ports:
+      - "9091:9090"
+    
+    volumes:
+      - ./config/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    
+    networks:
+      - beam-network
+
+  # Grafana for metrics visualization (optional)
+  grafana:
+    image: grafana/grafana:latest
+    container_name: beam-grafana
+    restart: unless-stopped
+    profiles:
+      - monitoring
+    
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    
+    ports:
+      - "3000:3000"
+    
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./config/grafana-dashboards:/etc/grafana/provisioning/dashboards
+    
+    networks:
+      - beam-network
 
 volumes:
   postgres_data:
@@ -163,50 +234,46 @@ volumes:
     driver: local
   pgadmin_data:
     driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
 
 networks:
-  Beam-network:
+  beam-network:
     driver: bridge
 
 # =============================================================================
-# DEVELOPMENT USAGE GUIDE
+# USAGE EXAMPLES
 # =============================================================================
 #
-# 1. Start the infrastructure:
-#    $ docker-compose up -d postgres redis
+# Development (minimal setup):
+#   docker-compose up -d postgres redis beam-api
 #
-# 2. Wait for services to be healthy:
-#    $ docker-compose ps
+# Development with tools:
+#   docker-compose --profile tools up -d
 #
-# 3. Run migrations (already done automatically via init scripts):
-#    $ docker-compose exec postgres psql -U postgres -d Beam -c "\dt"
+# Development with monitoring:
+#   docker-compose --profile monitoring up -d
 #
-# 4. Access services:
-#    - PostgreSQL: localhost:5432 (user: postgres, pass: postgres)
-#    - Redis: localhost:6379
-#    - pgAdmin: http://localhost:5050 (email: admin@Beam.dev, pass: admin)
-#    - Redis Commander: http://localhost:8081
+# Production:
+#   docker-compose up -d postgres redis beam-api
 #
-# 5. Build and run the API server:
-#    $ cd backend
-#    $ go build -o bin/api ./cmd/api
-#    $ ./bin/api
+# Scaling:
+#   docker-compose up -d --scale beam-api=3
 #
-#    Or uncomment the 'api' service above and:
-#    $ docker-compose up -d api
+# Fresh start:
+#   docker-compose down -v && docker-compose up -d
 #
-# 6. Test the API with grpcurl:
-#    $ grpcurl -plaintext -d '{"customer_id": "test_customer_1"}' \
-#      localhost:9090 Beam.balance.v1.BalanceService/GetBalance
+# View logs:
+#   docker-compose logs -f beam-api
 #
-# 7. View logs:
-#    $ docker-compose logs -f postgres
-#    $ docker-compose logs -f redis
-#    $ docker-compose logs -f api
-#
-# 8. Stop everything:
-#    $ docker-compose down
-#
-# 9. Fresh start (removes all data):
-#    $ docker-compose down -v
-#    $ docker-compose up -d
+# Access services:
+#   - Beam gRPC: localhost:9090
+#   - Beam REST: http://localhost:8080
+#   - PostgreSQL: localhost:5432 (user: postgres, password: postgres)
+#   - Redis: localhost:6379
+#   - pgAdmin: http://localhost:5050 (tools profile)
+#   - Redis Commander: http://localhost:8081 (tools profile)
+#   - Prometheus: http://localhost:9091 (monitoring profile)
+#   - Grafana: http://localhost:3000 (monitoring profile)
