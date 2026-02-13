@@ -659,8 +659,8 @@ Special thanks to all contributors and users!
 
 ## 💬 Community & Support
 
-- **GitHub Issues**: [Report bugs](https://github.com/yourusername/beam/issues)
-- **GitHub Discussions**: [Ask questions](https://github.com/yourusername/beam/discussions)
+- **GitHub Issues**: [Report bugs](https://github.com/kelpejol/beam/issues)
+- **GitHub Discussions**: [Ask questions](https://github.com/kelpejol/beam/discussions)
 - **Documentation**: [Read the docs](docs/)
 - **Examples**: [See examples](examples/)
 
